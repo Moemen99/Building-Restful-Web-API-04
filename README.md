@@ -390,3 +390,183 @@ Careful consideration needed when:
 
 ---
 **Note**: The choice of service lifetime can significantly impact application performance and behavior. Choose based on your specific requirements and use case.
+
+
+
+# Service Lifetime Implementation Demo
+
+## 1. Interface Setup
+
+```csharp
+// Base interface
+public interface IOS
+{
+    string RunApp();
+    string OperationId { get; }
+}
+
+// Specialized interfaces for different lifetimes
+public interface IOperationTransient : IOS { }
+public interface IOperationScoped : IOS { }
+public interface IOperationSingleton : IOS { }
+```
+
+## 2. Service Implementation
+
+```csharp
+public class WindowsOsService : IOperationTransient, IOperationScoped, IOperationSingleton
+{
+    public string OperationId { get; }
+
+    public WindowsOsService()
+    {
+        OperationId = Guid.NewGuid().ToString()[..4]; // Take first 4 characters
+    }
+
+    public string RunApp()
+    {
+        return "Running from Windows";
+    }
+}
+
+public class MacOsService : IOperationTransient, IOperationScoped, IOperationSingleton
+{
+    public string OperationId { get; }
+
+    public MacOsService()
+    {
+        OperationId = Guid.NewGuid().ToString(); // Full GUID
+    }
+
+    public string RunApp()
+    {
+        return "Running from MacOS";
+    }
+}
+```
+
+## 3. Service Registration
+
+```csharp
+// Program.cs
+builder.Services.AddTransient<IOperationTransient, WindowsOsService>();
+builder.Services.AddScoped<IOperationScoped, WindowsOsService>();
+builder.Services.AddSingleton<IOperationSingleton, WindowsOsService>();
+```
+
+## 4. Controller Implementation
+
+```csharp
+[ApiController]
+public class DevelopmentController : ControllerBase
+{
+    private readonly ILogger<DevelopmentController> _logger;
+    private readonly IOperationTransient _operationTransient;
+    private readonly IOperationScoped _operationScoped;
+    private readonly IOperationSingleton _operationSingleton;
+
+    public DevelopmentController(
+        ILogger<DevelopmentController> logger,
+        IOperationTransient operationTransient,
+        IOperationScoped operationScoped,
+        IOperationSingleton operationSingleton)
+    {
+        _logger = logger;
+        _operationTransient = operationTransient;
+        _operationScoped = operationScoped;
+        _operationSingleton = operationSingleton;
+    }
+
+    [HttpGet]
+    public IActionResult Run()
+    {
+        _logger.LogInformation("Transient {0}", _operationTransient.OperationId);
+        _logger.LogWarning("Scoped {0}", _operationScoped.OperationId);
+        _logger.LogError("Singleton {0}", _operationSingleton.OperationId);
+        return Ok();
+    }
+}
+```
+
+## 5. Middleware Implementation for Testing Scoped Services
+
+```csharp
+public class MyMiddleware
+{
+    private readonly RequestDelegate _next;
+    private readonly ILogger _logger;
+    private readonly IOperationSingleton _operationSingleton;
+
+    public MyMiddleware(
+        RequestDelegate next,
+        ILogger<MyMiddleware> logger,
+        IOperationSingleton operationSingleton)
+    {
+        _next = next;
+        _logger = logger;
+        _operationSingleton = operationSingleton;
+    }
+
+    public async Task InvokeAsync(
+        HttpContext context,
+        IOperationTransient operationTransient,
+        IOperationScoped operationScoped)
+    {
+        _logger.LogInformation("Middleware Transient: {0}", operationTransient.OperationId);
+        _logger.LogWarning("Middleware Scoped: {0}", operationScoped.OperationId);
+        _logger.LogError("Middleware Singleton: {0}", _operationSingleton.OperationId);
+        
+        await _next(context);
+    }
+}
+
+// Register in Program.cs
+app.UseMiddleware<MyMiddleware>();
+```
+
+## Behavior Analysis
+
+### Request Flow
+```mermaid
+sequenceDiagram
+    Client->>+Middleware: HTTP Request
+    Middleware->>+Controller: Forward Request
+    Controller->>-Middleware: Response
+    Middleware->>-Client: HTTP Response
+```
+
+### Lifetime Behavior Table
+
+| Service Type | New Request | Same Request Multiple Points | Application Restart |
+|-------------|-------------|----------------------------|-------------------|
+| Transient | New ID | New ID | New ID |
+| Scoped | New ID | Same ID | New ID |
+| Singleton | Same ID | Same ID | New ID |
+
+### Testing Results
+
+1. **First Request**:
+   - Middleware and Controller show:
+     - Different IDs for Transient
+     - Same ID for Scoped
+     - Same ID for Singleton
+
+2. **Subsequent Requests**:
+   - Transient: New IDs every time
+   - Scoped: Same ID within request, new ID between requests
+   - Singleton: Same ID until application restart
+
+```mermaid
+graph TD
+    A[Request] --> B[Middleware]
+    B --> C[Controller]
+    B --> D[Transient ID: Always New]
+    B --> E[Scoped ID: Same per Request]
+    B --> F[Singleton ID: Same for App Lifetime]
+    C --> G[Transient ID: Always New]
+    C --> H[Scoped ID: Same as Middleware]
+    C --> I[Singleton ID: Same as Middleware]
+```
+
+---
+**Note**: This implementation demonstrates how different service lifetimes behave in a real application context, showing the practical differences between Transient, Scoped, and Singleton services.
