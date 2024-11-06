@@ -248,3 +248,145 @@ builder.Services.AddSingleton<IOS, WindowsOsService>();  // One instance for app
 
 ---
 **Note**: This implementation demonstrates how DI helps follow the Dependency Inversion Principle while providing flexibility and maintainability in your application.
+
+
+# Service Lifetimes in ASP.NET Core Dependency Injection
+
+## Overview
+Service lifetime determines how long an instance of a registered service remains available in an application. The dependency injection container manages these lifetimes automatically.
+
+## Types of Service Lifetimes
+
+### 1. Transient (⭐)
+```csharp
+services.AddTransient<IMyService, MyService>();
+```
+
+#### Characteristics
+- New instance created each time service is requested
+- Default lifetime
+- Each injection gets its own instance
+- Stateless services
+
+#### Best Used For
+- Lightweight services
+- Stateless operations
+- Services that don't share state
+- Logging services
+
+```mermaid
+graph TD
+    A[Request 1] --> B[Instance 1]
+    A --> C[Instance 2]
+    A --> D[Instance 3]
+    E[Request 2] --> F[Instance 4]
+    E --> G[Instance 5]
+    E --> H[Instance 6]
+```
+
+### 2. Scoped (⚪)
+```csharp
+services.AddScoped<IMyService, MyService>();
+```
+
+#### Characteristics
+- One instance per request
+- Shared within same HTTP request
+- New instance for each new request
+- Instance disposed after request completion
+
+#### Best Used For
+- Per-request operations
+- Database contexts
+- Request-specific services
+
+```mermaid
+graph TD
+    A[Request 1] --> B[Instance 1]
+    A --> B
+    A --> B
+    C[Request 2] --> D[Instance 2]
+    C --> D
+    C --> D
+```
+
+### 3. Singleton (⬛)
+```csharp
+services.AddSingleton<IMyService, MyService>();
+```
+
+#### Characteristics
+- Single instance for entire application lifetime
+- Shared across all requests
+- Created at first request
+- Lives until application stops
+
+#### Best Used For
+- Application-wide services
+- Shared resources
+- Configuration services
+- Caching services
+
+```mermaid
+graph TD
+    A[Request 1] --> B[Single Instance]
+    C[Request 2] --> B
+    D[Request 3] --> B
+```
+
+## Lifetime Comparison Table
+
+| Lifetime | Instance Creation | Scope | Best For |
+|----------|------------------|-------|----------|
+| Transient | Every injection | Per injection | Lightweight, stateless services |
+| Scoped | Every request | Per HTTP request | Database contexts, request-specific services |
+| Singleton | Once | Application-wide | Configuration, caching, shared resources |
+
+## Performance Considerations
+
+### Transient
+- More memory usage
+- Fresh instance every time
+- No state sharing concerns
+
+### Scoped
+- Balanced memory usage
+- State shared within request
+- Most commonly used
+
+### Singleton
+- Minimal memory usage
+- Application-wide state sharing
+- Requires careful consideration
+
+## Usage Guidelines
+
+1. **Choose Transient When**:
+   - Service is lightweight
+   - State isolation is critical
+   - Each operation needs fresh instance
+
+2. **Choose Scoped When**:
+   - Service state should persist for request
+   - Database contexts needed
+   - Request-level caching required
+
+3. **Choose Singleton When**:
+   - Service is expensive to create
+   - Application-wide sharing needed
+   - State should persist across requests
+
+## Warning ⚠️
+```mermaid
+graph TD
+    A[Singleton Service] -->|Should Not Depend On| B[Scoped Service]
+    A -->|Should Not Depend On| C[Transient Service]
+```
+
+Careful consideration needed when:
+- Using Singleton services
+- Sharing state across requests
+- Managing disposable resources
+
+---
+**Note**: The choice of service lifetime can significantly impact application performance and behavior. Choose based on your specific requirements and use case.
