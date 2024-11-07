@@ -570,3 +570,130 @@ graph TD
 
 ---
 **Note**: This implementation demonstrates how different service lifetimes behave in a real application context, showing the practical differences between Transient, Scoped, and Singleton services.
+
+
+# Keyed Services in .NET 8
+
+## Overview
+Keyed Services allow multiple implementations of the same interface to be registered in the dependency injection container, with each implementation identified by a unique key.
+
+## Traditional vs Keyed Registration
+
+### Traditional Service Registration
+```csharp
+// Only one implementation possible per interface
+builder.Services.AddTransient<IOperationTransient, WindowsOsService>();
+```
+
+### Keyed Service Registration
+```csharp
+// Multiple implementations for the same interface
+builder.Services.AddKeyedTransient<IOperationTransient, WindowsOsService>("windows");
+builder.Services.AddKeyedTransient<IOperationTransient, MacOsService>("macOs");
+```
+
+## Implementation Example
+
+### 1. Service Registration
+```csharp
+public class Startup
+{
+    public void ConfigureServices(IServiceCollection services)
+    {
+        // Register multiple implementations
+        services.AddKeyedTransient<IOperationTransient, WindowsOsService>("windows");
+        services.AddKeyedTransient<IOperationTransient, MacOsService>("macOs");
+        
+        // Also available for other lifetimes
+        services.AddKeyedScoped<IOperationScoped, WindowsOsService>("windows");
+        services.AddKeyedSingleton<IOperationSingleton, WindowsOsService>("windows");
+    }
+}
+```
+
+### 2. Controller Usage
+```csharp
+public class DevelopmentController : ControllerBase
+{
+    private readonly ILogger _logger;
+
+    public DevelopmentController(ILogger<DevelopmentController> logger)
+    {
+        _logger = logger;
+    }
+
+    [HttpGet]
+    public IActionResult Run(
+        [FromKeyedServices(Key = "windows")] IOperationTransient windowsService,
+        [FromKeyedServices(Key = "macOs")] IOperationTransient macOsService)
+    {
+        _logger.LogWarning("Windows {0}", windowsService.OperationId);
+        _logger.LogError("MacOs {0}", macOsService.OperationId);
+        
+        return Ok();
+    }
+}
+```
+
+## Key Features
+
+```mermaid
+graph TD
+    A[Keyed Services] --> B[Multiple Implementations]
+    A --> C[Key-based Resolution]
+    A --> D[Lifetime Options]
+    B --> E[Same Interface]
+    C --> F[FromKeyedServices Attribute]
+    D --> G[Transient]
+    D --> H[Scoped]
+    D --> I[Singleton]
+```
+
+### Advantages Table
+
+| Feature | Traditional DI | Keyed Services |
+|---------|---------------|----------------|
+| Implementations per interface | Single | Multiple |
+| Implementation selection | At registration | At injection |
+| Runtime switching | Limited | Flexible |
+| Configuration complexity | Simple | More detailed |
+
+## Use Cases
+
+1. **Multi-platform Services**
+   ```mermaid
+   graph LR
+       A[IOperationService] --> B[Windows Implementation]
+       A --> C[MacOS Implementation]
+       A --> D[Linux Implementation]
+   ```
+
+2. **Environment-specific Implementations**
+   - Development vs Production
+   - Different cloud providers
+   - Various database connections
+
+3. **Feature Variations**
+   - Different authentication providers
+   - Multiple payment processors
+   - Various logging implementations
+
+## Best Practices
+
+1. **Key Naming**
+   - Use consistent naming conventions
+   - Make keys descriptive and meaningful
+   - Consider using constants for keys
+
+2. **Documentation**
+   - Document available keys
+   - Explain implementation differences
+   - Maintain key registry
+
+3. **Usage**
+   - Group related implementations
+   - Consider using enums for keys
+   - Handle missing implementations
+
+---
+**Note**: Keyed Services provide a clean way to manage multiple implementations of the same interface, offering greater flexibility in service resolution while maintaining clean dependency injection practices.
